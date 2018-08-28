@@ -22,7 +22,7 @@ read_set_t read_fasta_file(std::string file) {
 }
 
 read_set_t read_fastq_file(std::string file) {
-    // TODO
+    // TODO    
 }
 
 bool _comp_read_set_desc(read_t a, read_t b) {

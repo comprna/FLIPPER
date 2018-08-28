@@ -1,5 +1,5 @@
-#ifndef _rattle_fasta_h
-#define _rattle_fasta_h
+#ifndef _flipper_fasta_h
+#define _flipper_fasta_h
 
 #include <string>
 #include <vector>
