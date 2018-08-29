@@ -1,13 +1,8 @@
-#include "polya.hpp"
 #include "fasta.hpp"
-#include "utils.hpp"
-#include "adapters.hpp"
+#include "fl.hpp"
 #include "argagg.hpp"
 
 #include <iostream>
-#include <algorithm>
-#include <future>
-#include <mutex>
 
 int main(int argc, char *argv[]) {
     argagg::parser argparser {{
@@ -69,98 +64,7 @@ int main(int argc, char *argv[]) {
     }
     
     if (args["fl"]) {
-        read_set_t fl_reads;
-
-        std::mutex mu;
-        std::vector<std::future<void>> tasks;
-        int n_threads = args["threads"];
-
-        for (int t = 0; t < n_threads; ++t) {
-            tasks.emplace_back(std::async(std::launch::async, [t, &mu, &reads, &args, n_threads, &fl_reads] {
-                for (int i = t; i < reads.size(); i += n_threads) {
-                    auto read = reads[i];
-
-                    // TODO: analyze small reads as well
-                    if (read.seq.size() < 151) {
-                        continue;
-                    }
-
-                    std::string seq = "";
-                    std::string qt = "";
-
-                    int pos5 = adapter_pos_start(read.seq, args["a5"]);
-                    int pos3 = adapter_pos_end(read.seq, args["a3"]);
-
-                    if (pos5 != -1 && pos3 != -1) {
-                        seq = read.seq.substr(pos5, read.seq.size()-150+pos3-pos5);
-
-                        if (args["fastq"]) {
-                            qt = read.quality.substr(pos5, read.quality.size()-150+pos3-pos5);
-                        }
-                    } else {
-                        pos5 = adapter_pos_start(read.seq, reverse_complement(args["a5"]));
-                        pos3 = adapter_pos_end(read.seq, reverse_complement(args["a3"]));
-            
-                        if (pos5 != -1 && pos3 != -1) {
-                            seq = read.seq.substr(pos5, read.seq.size()-150+pos3-pos5);
-            
-                            if (args["fastq"]) {
-                                qt = read.quality.substr(pos5, read.quality.size()-150+pos3-pos5);
-                            }
-                        }
-                    }
-
-                    if (seq != "") {                        
-                        auto polya_info = get_polya(seq);
-                        if (polya_info.tail_pos > -1) {
-                            seq = seq.substr(0, polya_info.tail_pos);
-                            
-                            read_t fl_read;
-                            fl_read.header = read.header;
-                            fl_read.seq = seq;
-                            
-                            if (args["fastq"]) {
-                                qt = qt.substr(0, polya_info.tail_pos);
-                                
-                                fl_read.quality = qt;
-                                fl_read.ann = read.ann;
-                            }
-
-                            std::lock_guard<std::mutex> lock(mu);
-                            fl_reads.push_back(fl_read);
-                        } else {
-                            seq = reverse_complement(seq);
-                            if (args["fastq"]) {
-                                std::reverse(qt.begin(), qt.end());
-                            }
-
-                            polya_info = get_polya(seq);
-                            if (polya_info.tail_pos > -1) {
-                                seq = seq.substr(0, polya_info.tail_pos);
-                                
-                                read_t fl_read;
-                                fl_read.header = read.header;
-                                fl_read.seq = seq;
-                                
-                                if (args["fastq"]) {
-                                    qt = qt.substr(0, polya_info.tail_pos);
-                                    
-                                    fl_read.quality = qt;
-                                    fl_read.ann = read.ann;
-                                }
-            
-                                std::lock_guard<std::mutex> lock(mu);
-                                fl_reads.push_back(fl_read);
-                            } 
-                        }
-                    }
-                }
-            }));
-        }
-
-        for (auto &&task : tasks) {
-            task.get();
-        }
+        read_set_t fl_reads = get_fl_reads(reads, args["a5"], args["a3"], args["fastq"], args["threads"]);        
 
         for (auto read : fl_reads) {
             std::cout << read.header << std::endl;
